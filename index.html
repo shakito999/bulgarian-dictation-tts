@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Българска Диктовка</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0c0e14;
+            --surface: #151820;
+            --surface-2: #1c2030;
+            --border: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(255, 255, 255, 0.14);
+            --text: #eef0f6;
+            --text-muted: #8b93a8;
+            --accent: #6c8cff;
+            --accent-soft: rgba(108, 140, 255, 0.12);
+            --green: #34d399;
+            --green-soft: rgba(52, 211, 153, 0.15);
+            --amber: #fbbf24;
+            --amber-soft: rgba(251, 191, 36, 0.12);
+            --red: #f87171;
+            --red-soft: rgba(248, 113, 113, 0.12);
+            --orange: #fb923c;
+            --radius: 14px;
+            --radius-sm: 10px;
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(108, 140, 255, 0.15), transparent),
+                radial-gradient(ellipse 60% 40% at 100% 100%, rgba(52, 211, 153, 0.06), transparent);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .app {
+            position: relative;
+            z-index: 1;
+            max-width: 820px;
+            margin: 0 auto;
+            padding: 2.5rem 1.25rem 3rem;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 52px;
+            height: 52px;
+            background: var(--accent-soft);
+            border: 1px solid rgba(108, 140, 255, 0.25);
+            border-radius: 16px;
+            margin-bottom: 1rem;
+            color: var(--accent);
+        }
+
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.35rem;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* Editor card */
+        .editor-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            margin-bottom: 1.25rem;
+            transition: border-color 0.2s;
+        }
+
+        body.is-playing .editor-card {
+            border-color: rgba(52, 211, 153, 0.3);
+        }
+
+        .editor-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface-2);
+        }
+
+        .editor-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .editor-label svg { color: var(--accent); }
+
+        .editor-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .editor-meta-sep {
+            opacity: 0.35;
+        }
+
+        .time-estimate {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .time-estimate svg {
+            flex-shrink: 0;
+            opacity: 0.85;
+        }
+
+        .char-count {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        textarea {
+            display: block;
+            width: 100%;
+            min-height: 220px;
+            padding: 1.25rem 1.25rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text);
+            font-family: 'Source Serif 4', Georgia, serif;
+            font-size: 1.05rem;
+            line-height: 1.75;
+            resize: vertical;
+        }
+
+        textarea::placeholder { color: rgba(139, 147, 168, 0.5); }
+        textarea:focus { outline: none; }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            margin-bottom: 1.25rem;
+            flex-wrap: wrap;
+        }
+
+        .controls-main {
+            display: flex;
+            gap: 0.5rem;
+            flex: 1;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.45rem;
+            padding: 0.7rem 1.25rem;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            color: var(--text);
+            white-space: nowrap;
+        }
+
+        .btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn:not(:disabled):hover { transform: translateY(-1px); }
+        .btn:not(:disabled):active { transform: translateY(0); }
+
+        .btn-primary {
+            background: var(--green);
+            color: #0a1a12;
+            padding: 0.75rem 1.5rem;
+            font-size: 0.95rem;
+        }
+
+        .btn-primary:not(:disabled):hover {
+            background: #2dd4a0;
+            box-shadow: 0 4px 20px rgba(52, 211, 153, 0.35);
+        }
+
+        .btn-secondary {
+            background: var(--surface-2);
+            border-color: var(--border);
+        }
+
+        .btn-secondary:not(:disabled):hover {
+            background: #252a3a;
+            border-color: var(--border-hover);
+        }
+
+        .btn-warning:not(:disabled):hover {
+            background: rgba(251, 146, 60, 0.15);
+            border-color: rgba(251, 146, 60, 0.35);
+            color: var(--orange);
+        }
+
+        .btn-danger:not(:disabled):hover {
+            background: var(--red-soft);
+            border-color: rgba(248, 113, 113, 0.35);
+            color: var(--red);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            border-color: var(--border);
+            color: var(--text-muted);
+            margin-left: auto;
+        }
+
+        .btn-ghost:not(:disabled):hover {
+            color: var(--text);
+            border-color: var(--border-hover);
+            background: var(--surface);
+        }
+
+        /* Status */
+        #statusCard {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.25rem;
+            margin-bottom: 1.25rem;
+            animation: slideIn 0.25s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .status-top {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            margin-bottom: 1rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            flex-shrink: 0;
+        }
+
+        body.is-paused .status-dot {
+            background: var(--orange);
+            animation: none;
+        }
+
+        .status-dot.pulse {
+            animation: dotPulse 1.5s ease infinite;
+        }
+
+        @keyframes dotPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5); }
+            50% { box-shadow: 0 0 0 6px rgba(52, 211, 153, 0); }
+        }
+
+        .status-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        #punctuationDisplay {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--amber);
+            text-align: center;
+            min-height: 2.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.75rem;
+            transition: opacity 0.2s;
+        }
+
+        #punctuationDisplay:not(:empty) {
+            background: var(--amber-soft);
+            border-radius: var(--radius-sm);
+            padding: 0.5rem 1rem;
+            animation: popIn 0.3s ease;
+        }
+
+        @keyframes popIn {
+            from { opacity: 0; transform: scale(0.92); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        #progressDisplay {
+            text-align: center;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 0.85rem;
+        }
+
+        .progress-track {
+            height: 4px;
+            background: var(--surface-2);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent), var(--green));
+            border-radius: 99px;
+            transition: width 0.4s ease;
+        }
+
+        /* Settings */
+        .settings-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .settings-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 1rem 1.25rem;
+            background: none;
+            border: none;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .settings-toggle:hover { background: var(--surface-2); }
+
+        .settings-toggle-left {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .settings-toggle-left svg { color: var(--text-muted); }
+
+        .chevron {
+            color: var(--text-muted);
+            transition: transform 0.25s ease;
+        }
+
+        .settings-card.open .chevron { transform: rotate(180deg); }
+
+        .settings-body {
+            display: none;
+            padding: 0 1.25rem 1.25rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .settings-card.open .settings-body { display: block; }
+
+        .settings-section {
+            padding-top: 1.25rem;
+        }
+
+        .settings-section + .settings-section {
+            margin-top: 0.5rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .settings-section h3 {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            margin-bottom: 1rem;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1.1rem;
+        }
+
+        .setting-group label {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 0.55rem;
+        }
+
+        .setting-group label span {
+            color: var(--accent);
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .setting-group select {
+            width: 100%;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 0.6rem 0.75rem;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+
+        .setting-group select:focus {
+            outline: none;
+            border-color: rgba(108, 140, 255, 0.5);
+        }
+
+        .setting-group select option {
+            background: var(--surface-2);
+            color: var(--text);
+        }
+
+        .setting-group input[type="range"] {
+            width: 100%;
+            height: 5px;
+            background: var(--surface-2);
+            border-radius: 99px;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        .setting-group input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 0 3px var(--accent-soft);
+            transition: box-shadow 0.15s;
+        }
+
+        .setting-group input[type="range"]::-webkit-slider-thumb:hover {
+            box-shadow: 0 0 0 5px var(--accent-soft);
+        }
+
+        .setting-group input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--accent);
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        /* Footer hint */
+        .hint {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.65rem;
+            margin-top: 1.5rem;
+            padding: 0.85rem 1rem;
+            background: var(--accent-soft);
+            border: 1px solid rgba(108, 140, 255, 0.15);
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.55;
+        }
+
+        .hint svg {
+            flex-shrink: 0;
+            margin-top: 2px;
+            color: var(--accent);
+        }
+
+        @media (max-width: 540px) {
+            .app { padding: 1.5rem 1rem 2rem; }
+            .controls { flex-direction: column; align-items: stretch; }
+            .controls-main { justify-content: center; }
+            .btn-ghost { margin-left: 0; justify-content: center; }
+            .settings-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <div class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+            </div>
+            <h1>Българска Диктовка</h1>
+            <p>Четене с обявяване на пунктуация и паузи за писане</p>
+        </header>
+
+        <div class="editor-card">
+            <div class="editor-header">
+                <span class="editor-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    Текст за диктовка
+                </span>
+                <div class="editor-meta">
+                    <span class="char-count" id="charCount">0 знака</span>
+                    <span class="editor-meta-sep" id="metaSep" style="display:none">·</span>
+                    <span class="time-estimate" id="timeEstimate" style="display:none" title="Приблизителна оценка — TTS, паузи за писане и пунктуация">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <span id="timeEstimateText"></span>
+                    </span>
+                </div>
+            </div>
+            <textarea id="textInput" placeholder="Поставете или напишете текста си тук…"></textarea>
+        </div>
+
+        <div class="controls">
+            <div class="controls-main">
+                <button id="startBtn" class="btn btn-primary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Започни
+                </button>
+                <button id="pauseBtn" class="btn btn-secondary btn-warning" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    Пауза
+                </button>
+                <button id="stopBtn" class="btn btn-secondary btn-danger" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="1"/></svg>
+                    Спри
+                </button>
+            </div>
+            <button id="testBtn" class="btn btn-ghost">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                Тест звук
+            </button>
+        </div>
+
+        <div id="statusCard" style="display: none;">
+            <div class="status-top">
+                <div class="status-dot pulse" id="statusDot"></div>
+                <span class="status-label" id="statusLabel">Четене в ход</span>
+            </div>
+            <div id="punctuationDisplay"></div>
+            <p id="progressDisplay"></p>
+            <div class="progress-track">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+
+        <div class="settings-card" id="settingsCard">
+            <button class="settings-toggle" id="settingsToggle" type="button">
+                <span class="settings-toggle-left">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    Настройки
+                </span>
+                <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="settings-body">
+                <div class="settings-section">
+                    <h3>Глас и език</h3>
+                    <div class="settings-grid">
+                        <div class="setting-group">
+                            <label for="languageSelect">Език</label>
+                            <select id="languageSelect">
+                                <option value="bg">Български 🇧🇬</option>
+                                <option value="ru">Руски 🇷🇺</option>
+                            </select>
+                        </div>
+                        <div class="setting-group">
+                            <label for="voiceSelect">Глас</label>
+                            <select id="voiceSelect"></select>
+                        </div>
+                        <div class="setting-group">
+                            <label for="speedRange">Скорост на говорене <span id="speedValue">0.9</span>x</label>
+                            <input type="range" id="speedRange" min="0.5" max="1.5" step="0.1" value="0.9">
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>Темпо на писане</h3>
+                    <div class="settings-grid">
+                        <div class="setting-group">
+                            <label for="typingSpeedRange">Скорост на писане <span id="typingSpeedValue">27</span> WPM</label>
+                            <input type="range" id="typingSpeedRange" min="10" max="35" step="1" value="27">
+                        </div>
+                        <div class="setting-group">
+                            <label for="chunkSizeRange">Думи на част <span id="chunkSizeValue">3</span></label>
+                            <input type="range" id="chunkSizeRange" min="1" max="10" step="1" value="3">
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>Паузи</h3>
+                    <div class="settings-grid">
+                        <div class="setting-group">
+                            <label for="commaPauseRange">Запетая <span id="commaPauseValue">200</span> ms</label>
+                            <input type="range" id="commaPauseRange" min="200" max="1500" step="50" value="200">
+                        </div>
+                        <div class="setting-group">
+                            <label for="periodPauseRange">Точка <span id="periodPauseValue">500</span> ms</label>
+                            <input type="range" id="periodPauseRange" min="200" max="2000" step="50" value="500">
+                        </div>
+                        <div class="setting-group">
+                            <label for="newlinePauseRange">Нов ред <span id="newlinePauseValue">800</span> ms</label>
+                            <input type="range" id="newlinePauseRange" min="300" max="1500" step="50" value="800">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="hint">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Натиснете <strong>Започни</strong> — приложението чете на части и обявява пунктуацията. Празен ред между абзаци се обявява като „нов ред".</span>
+        </div>
+    </div>
+
+    <script>
+        let isPlaying = false;
+        let isPaused = false;
+        let chunks = [];
+        let currentChunkIndex = 0;
+        let voices = [];
+        let selectedVoice = '';
+
+        let language = 'bg';
+        let speed = 0.9;
+        let typingSpeed = 27;
+        let chunkSize = 3;
+        let commaPause = 200;
+        let periodPause = 500;
+        let newlinePause = 800;
+
+        const textInput = document.getElementById('textInput');
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusCard = document.getElementById('statusCard');
+        const punctuationDisplay = document.getElementById('punctuationDisplay');
+        const progressDisplay = document.getElementById('progressDisplay');
+        const progressFill = document.getElementById('progressFill');
+        const statusDot = document.getElementById('statusDot');
+        const statusLabel = document.getElementById('statusLabel');
+        const charCount = document.getElementById('charCount');
+        const metaSep = document.getElementById('metaSep');
+        const timeEstimate = document.getElementById('timeEstimate');
+        const timeEstimateText = document.getElementById('timeEstimateText');
+        const voiceSelect = document.getElementById('voiceSelect');
+        const speedRange = document.getElementById('speedRange');
+        const speedValue = document.getElementById('speedValue');
+        const chunkSizeRange = document.getElementById('chunkSizeRange');
+        const chunkSizeValue = document.getElementById('chunkSizeValue');
+        const commaPauseRange = document.getElementById('commaPauseRange');
+        const commaPauseValue = document.getElementById('commaPauseValue');
+        const periodPauseRange = document.getElementById('periodPauseRange');
+        const periodPauseValue = document.getElementById('periodPauseValue');
+        const newlinePauseRange = document.getElementById('newlinePauseRange');
+        const newlinePauseValue = document.getElementById('newlinePauseValue');
+        const testBtn = document.getElementById('testBtn');
+        const languageSelect = document.getElementById('languageSelect');
+        const typingSpeedRange = document.getElementById('typingSpeedRange');
+        const typingSpeedValue = document.getElementById('typingSpeedValue');
+        const settingsCard = document.getElementById('settingsCard');
+        const settingsToggle = document.getElementById('settingsToggle');
+
+        const pauseIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+        const playIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+
+        function updateCharCount() {
+            const len = textInput.value.length;
+            charCount.textContent = len === 0 ? '0 знака' : `${len.toLocaleString('bg-BG')} ${len === 1 ? 'знак' : 'знака'}`;
+            updateTimeEstimate();
+        }
+
+        function formatDuration(ms) {
+            const totalSec = Math.max(1, Math.round(ms / 1000));
+            if (totalSec < 60) return `${totalSec} сек`;
+            const min = Math.floor(totalSec / 60);
+            const sec = totalSec % 60;
+            if (sec === 0) return `${min} мин`;
+            return `${min} мин ${sec} сек`;
+        }
+
+        function getPunctuationMessage(punctuation) {
+            if (language === 'bg') {
+                switch (punctuation) {
+                    case ',': return 'запетая';
+                    case '.': return 'точка';
+                    case '!': return 'удивителна';
+                    case '?': return 'въпросителна';
+                    case ':': return 'двоеточие';
+                    case ';': return 'точка и запетая';
+                    case '-': return 'тире';
+                    case '—': return 'дълго тире';
+                    case '(': return 'отворена скоба';
+                    case ')': return 'затворена скоба';
+                    case '"': return 'кавички';
+                    case "'": return 'апостроф';
+                    case '\n': return 'нов ред';
+                    default: return '';
+                }
+            }
+            switch (punctuation) {
+                case ',': return 'запятая';
+                case '.': return 'точка';
+                case '!': return 'восклицательный';
+                case '?': return 'вопросительный';
+                case ':': return 'двоеточие';
+                case ';': return 'точка с запятой';
+                case '-': return 'тире';
+                case '—': return 'длинное тире';
+                case '(': return 'открытая скобка';
+                case ')': return 'закрытая скобка';
+                case '"': return 'кавычки';
+                case "'": return 'апостроф';
+                case '\n': return 'новая строка';
+                default: return '';
+            }
+        }
+
+        function getPunctuationPauseMs(punctuation) {
+            if (punctuation === ',') return commaPause;
+            if (punctuation === '.') return periodPause;
+            if (punctuation === '!' || punctuation === '?') return periodPause;
+            if (punctuation === ':' || punctuation === ';') return periodPause;
+            if (punctuation === '-' || punctuation === '—') return commaPause;
+            if (punctuation === '\n') return newlinePause;
+            return 300;
+        }
+
+        // Estimate Google TTS playback from text length (Bulgarian ~12 chars/sec)
+        function estimateTTSDuration(text) {
+            if (!text) return 0;
+            const chars = text.replace(/\s/g, '').length;
+            const words = text.trim().split(/\s+/).filter(Boolean).length;
+
+            if (words <= 1) {
+                return Math.max(380, 90 + chars * 82);
+            }
+
+            const byChars = (chars / 12.5) * 1000;
+            const byWords = (words / 2.4) * 1000;
+            return Math.max(550, Math.max(byChars, byWords));
+        }
+
+        function estimateWordPartsDuration(word) {
+            const parts = tokenizeWord(word);
+            let total = 0;
+
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                const next = parts[i + 1];
+                const prev = parts[i - 1];
+
+                if (part.type === 'text' && part.value) {
+                    total += estimateTTSDuration(part.value);
+                    const followedByHyphen = next?.type === 'punctuation' && isHyphen(next.value);
+                    total += typingPause(part.value, { compoundPart: followedByHyphen });
+                } else if (part.type === 'punctuation') {
+                    const message = getPunctuationMessage(part.value);
+                    total += estimateTTSDuration(message);
+
+                    const internalHyphen = isHyphen(part.value) &&
+                        prev?.type === 'text' && next?.type === 'text';
+
+                    total += internalHyphen ? 80 : getPunctuationPauseMs(part.value);
+                }
+            }
+
+            return total;
+        }
+
+        function estimateChunkDuration(chunk) {
+            const words = chunk.split(' ').filter(w => w.length > 0);
+            const needsWordByWord = words.some(word => wordContainsPunctuation(word));
+
+            if (needsWordByWord) {
+                return words.reduce((sum, word) => sum + estimateWordPartsDuration(word), 0);
+            }
+
+            return estimateTTSDuration(chunk) + calculateTypingTime(chunk);
+        }
+
+        function estimateDictationDuration(text) {
+            const items = tokenizeText(text);
+            let total = 0;
+
+            for (const item of items) {
+                if (item.type === 'newline') {
+                    total += estimateTTSDuration(getPunctuationMessage('\n'));
+                    total += newlinePause;
+                } else {
+                    total += estimateChunkDuration(item.text);
+                }
+            }
+
+            return total;
+        }
+
+        function updateTimeEstimate() {
+            const text = textInput.value.trim();
+            if (!text) {
+                metaSep.style.display = 'none';
+                timeEstimate.style.display = 'none';
+                return;
+            }
+
+            const ms = estimateDictationDuration(text);
+            timeEstimateText.textContent = formatDuration(ms);
+            metaSep.style.display = '';
+            timeEstimate.style.display = 'inline-flex';
+        }
+
+        textInput.addEventListener('input', updateCharCount);
+        updateCharCount();
+
+        settingsToggle.addEventListener('click', () => {
+            settingsCard.classList.toggle('open');
+        });
+
+        function setProgress(current, total) {
+            const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+            progressFill.style.width = `${pct}%`;
+        }
+
+        function loadVoices() {
+            voices = window.speechSynthesis.getVoices();
+            const langVoices = voices.filter(voice =>
+                voice.lang.includes(language) || voice.lang.includes(language.toUpperCase())
+            );
+
+            voiceSelect.innerHTML = '';
+
+            const googleOption = document.createElement('option');
+            googleOption.value = 'google-tts';
+            googleOption.textContent = `Google TTS (${language === 'bg' ? 'Български 🇧🇬' : 'Руски 🇷🇺'})`;
+            voiceSelect.appendChild(googleOption);
+
+            langVoices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.name;
+                option.textContent = `${voice.name} (${voice.lang})`;
+                voiceSelect.appendChild(option);
+            });
+
+            voices.filter(voice => !voice.lang.includes(language) && !voice.lang.includes(language.toUpperCase())).forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.name;
+                option.textContent = `${voice.name} (${voice.lang})`;
+                voiceSelect.appendChild(option);
+            });
+
+            selectedVoice = 'google-tts';
+            voiceSelect.value = selectedVoice;
+        }
+
+        loadVoices();
+        if (window.speechSynthesis.onvoiceschanged !== undefined) {
+            window.speechSynthesis.onvoiceschanged = loadVoices;
+        }
+
+        const punctuationChars = [',', '.', '!', '?', ':', ';', '-', '—', '(', ')', '"', "'"];
+
+        function splitParagraphIntoChunks(paragraphText) {
+            const words = paragraphText.trim().split(/\s+/).filter(word => word.length > 0);
+            const chunkArray = [];
+            let i = 0;
+
+            while (i < words.length) {
+                let currentChunk = [];
+                let totalChars = 0;
+                let currentChunkSize = 0;
+
+                while (i < words.length && currentChunkSize < chunkSize) {
+                    const word = words[i];
+                    const wordChars = word.length;
+                    const endsWithPunctuation = punctuationChars.some(char => word.endsWith(char));
+
+                    if (endsWithPunctuation && currentChunkSize >= 1) {
+                        currentChunk.push(word);
+                        totalChars += wordChars;
+                        currentChunkSize++;
+                        i++;
+                        break;
+                    }
+
+                    if (totalChars + wordChars > 25 && currentChunkSize >= 2) break;
+
+                    currentChunk.push(word);
+                    totalChars += wordChars;
+                    currentChunkSize++;
+                    i++;
+                }
+
+                chunkArray.push(currentChunk.join(' '));
+            }
+
+            return chunkArray;
+        }
+
+        function tokenizeText(text) {
+            const normalized = text.replace(/\r\n/g, '\n').trim();
+            if (!normalized) return [];
+
+            const paragraphs = normalized.split(/\n\s*\n+/).filter(p => p.trim());
+            const items = [];
+
+            paragraphs.forEach((paragraph, index) => {
+                if (index > 0) items.push({ type: 'newline' });
+                splitParagraphIntoChunks(paragraph).forEach(chunk => {
+                    items.push({ type: 'chunk', text: chunk });
+                });
+            });
+
+            return items;
+        }
+
+        function calculateTypingTime(text) {
+            const charCount = text.replace(/\s/g, '').length;
+            const charsPerSecond = (typingSpeed * 5) / 60;
+            const typingTime = (charCount / charsPerSecond) * 1000;
+            const bufferTime = 300;
+            return Math.max(typingTime + bufferTime, 200);
+        }
+
+        function speakWithGoogleTTS(text) {
+            return new Promise(resolve => {
+                const audio = new Audio(`https://translate.google.com/translate_tts?ie=UTF-8&tl=${language}&client=tw-ob&q=${encodeURIComponent(text)}`);
+                audio.onended = () => resolve();
+                audio.onerror = () => resolve();
+                audio.play().catch(() => resolve());
+            });
+        }
+
+        function speakPunctuation(punctuation) {
+            return new Promise(resolve => {
+                const message = getPunctuationMessage(punctuation);
+                if (!message) { resolve(); return; }
+
+                punctuationDisplay.textContent = message;
+                speakWithGoogleTTS(message).then(() => resolve());
+            });
+        }
+
+        function wordContainsPunctuation(word) {
+            return punctuationChars.some(char => word.includes(char));
+        }
+
+        function tokenizeWord(word) {
+            const parts = [];
+            let buffer = '';
+
+            for (const char of word) {
+                if (punctuationChars.includes(char)) {
+                    if (buffer) {
+                        parts.push({ type: 'text', value: buffer });
+                        buffer = '';
+                    }
+                    parts.push({ type: 'punctuation', value: char });
+                } else {
+                    buffer += char;
+                }
+            }
+
+            if (buffer) parts.push({ type: 'text', value: buffer });
+            return parts;
+        }
+
+        async function pauseForPunctuation(punctuation) {
+            await pauseFor(getPunctuationPauseMs(punctuation));
+        }
+
+        function isHyphen(char) {
+            return char === '-' || char === '—';
+        }
+
+        function typingPause(text, { compoundPart = false } = {}) {
+            const full = calculateTypingTime(text);
+            if (compoundPart) return Math.min(full * 0.35, 280);
+            return full;
+        }
+
+        async function speakWordParts(word) {
+            const parts = tokenizeWord(word);
+
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                const next = parts[i + 1];
+                const prev = parts[i - 1];
+
+                if (part.type === 'text' && part.value) {
+                    const followedByHyphen = next?.type === 'punctuation' && isHyphen(next.value);
+                    await speakWithGoogleTTS(part.value);
+                    await pauseFor(typingPause(part.value, { compoundPart: followedByHyphen }));
+                } else if (part.type === 'punctuation') {
+                    await speakPunctuation(part.value);
+
+                    const internalHyphen = isHyphen(part.value) &&
+                        prev?.type === 'text' && next?.type === 'text';
+
+                    if (internalHyphen) {
+                        await pauseFor(80);
+                    } else {
+                        await pauseForPunctuation(part.value);
+                    }
+                }
+            }
+        }
+
+        function speakChunk(chunk) {
+            return new Promise(resolve => {
+                const words = chunk.split(' ').filter(w => w.length > 0);
+                const needsWordByWord = words.some(word => wordContainsPunctuation(word));
+
+                if (needsWordByWord) {
+                    let wordIndex = 0;
+
+                    const processNextWord = async () => {
+                        if (wordIndex >= words.length) { resolve(); return; }
+
+                        await speakWordParts(words[wordIndex]);
+                        wordIndex++;
+                        processNextWord();
+                    };
+
+                    processNextWord();
+                } else {
+                    const typingTime = calculateTypingTime(chunk);
+                    speakWithGoogleTTS(chunk).then(() => setTimeout(resolve, typingTime));
+                }
+            });
+        }
+
+        function pauseFor(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function startReading() {
+            const text = textInput.value.trim();
+            if (!text) return;
+
+            isPlaying = true;
+            isPaused = false;
+            const items = tokenizeText(text);
+            chunks = items.filter(item => item.type === 'chunk');
+            currentChunkIndex = 0;
+
+            startBtn.disabled = true;
+            pauseBtn.disabled = false;
+            stopBtn.disabled = false;
+            statusCard.style.display = 'block';
+            document.body.classList.add('is-playing');
+            document.body.classList.remove('is-paused');
+            statusLabel.textContent = 'Четене в ход';
+            statusDot.classList.add('pulse');
+            setProgress(0, items.length);
+
+            let chunkCounter = 0;
+
+            for (let i = 0; i < items.length; i++) {
+                if (!isPlaying) break;
+
+                while (isPaused) {
+                    await pauseFor(100);
+                    if (!isPlaying) break;
+                }
+
+                if (!isPlaying) break;
+
+                const item = items[i];
+                setProgress(i, items.length);
+
+                if (item.type === 'newline') {
+                    progressDisplay.textContent = 'Празен ред между абзаци';
+                    await speakPunctuation('\n');
+                    await pauseFor(newlinePause);
+                    continue;
+                }
+
+                chunkCounter++;
+                currentChunkIndex = chunkCounter - 1;
+                progressDisplay.textContent = `Част ${chunkCounter} от ${chunks.length}`;
+                punctuationDisplay.textContent = '';
+                await speakChunk(item.text);
+            }
+
+            stopReading();
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            document.body.classList.toggle('is-paused', isPaused);
+            statusLabel.textContent = isPaused ? 'На пауза' : 'Четене в ход';
+            statusDot.classList.toggle('pulse', !isPaused);
+            pauseBtn.innerHTML = isPaused
+                ? `${playIcon} Продължи`
+                : `${pauseIcon} Пауза`;
+        }
+
+        function stopReading() {
+            isPlaying = false;
+            isPaused = false;
+            window.speechSynthesis.cancel();
+
+            startBtn.disabled = false;
+            pauseBtn.disabled = true;
+            stopBtn.disabled = true;
+            statusCard.style.display = 'none';
+            punctuationDisplay.textContent = '';
+            progressDisplay.textContent = '';
+            progressFill.style.width = '0%';
+            pauseBtn.innerHTML = `${pauseIcon} Пауза`;
+            document.body.classList.remove('is-playing', 'is-paused');
+        }
+
+        function testSound() {
+            window.speechSynthesis.cancel();
+            const testText = language === 'bg' ? 'Това е тест на българския глас' : 'Это тест русского голоса';
+            speakWithGoogleTTS(testText);
+        }
+
+        startBtn.addEventListener('click', startReading);
+        pauseBtn.addEventListener('click', togglePause);
+        stopBtn.addEventListener('click', stopReading);
+        testBtn.addEventListener('click', testSound);
+
+        languageSelect.addEventListener('change', (e) => {
+            language = e.target.value;
+            loadVoices();
+            updateTimeEstimate();
+        });
+
+        voiceSelect.addEventListener('change', (e) => {
+            selectedVoice = e.target.value;
+        });
+
+        speedRange.addEventListener('input', (e) => {
+            speed = parseFloat(e.target.value);
+            speedValue.textContent = speed.toFixed(1);
+        });
+
+        typingSpeedRange.addEventListener('input', (e) => {
+            typingSpeed = parseInt(e.target.value);
+            typingSpeedValue.textContent = typingSpeed;
+            updateTimeEstimate();
+        });
+
+        chunkSizeRange.addEventListener('input', (e) => {
+            chunkSize = parseInt(e.target.value);
+            chunkSizeValue.textContent = chunkSize;
+            updateTimeEstimate();
+        });
+
+        commaPauseRange.addEventListener('input', (e) => {
+            commaPause = parseInt(e.target.value);
+            commaPauseValue.textContent = commaPause;
+            updateTimeEstimate();
+        });
+
+        periodPauseRange.addEventListener('input', (e) => {
+            periodPause = parseInt(e.target.value);
+            periodPauseValue.textContent = periodPause;
+            updateTimeEstimate();
+        });
+
+        newlinePauseRange.addEventListener('input', (e) => {
+            newlinePause = parseInt(e.target.value);
+            newlinePauseValue.textContent = newlinePause;
+            updateTimeEstimate();
+        });
+    </script>
+</body>
+</html>
