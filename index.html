@@ -316,6 +316,18 @@
             letter-spacing: 0.05em;
         }
 
+        .bold-badge {
+            margin-left: auto;
+            align-items: center;
+            padding: 0.2rem 0.6rem;
+            border-radius: 99px;
+            background: var(--amber-soft);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            color: var(--amber);
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
         #punctuationDisplay {
             font-size: 1.75rem;
             font-weight: 700;
@@ -597,6 +609,7 @@
             <div class="status-top">
                 <div class="status-dot pulse" id="statusDot"></div>
                 <span class="status-label" id="statusLabel">Четене в ход</span>
+                <span class="bold-badge" id="boldBadge" style="display:none">B · удебелено</span>
             </div>
             <div id="punctuationDisplay"></div>
             <p id="progressDisplay"></p>
@@ -669,7 +682,7 @@
 
         <div class="hint">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-            <span>Натиснете <strong>Започни</strong> — приложението чете на части и обявява пунктуацията. Празен ред между абзаци се обявява като „нов ред".</span>
+            <span>Натиснете <strong>Започни</strong> — приложението чете на части и обявява пунктуацията. Всеки нов ред се казва „нов ред“, а празен ред — „нов абзац“. При поставяне от Google Docs/Word удебеленият текст се маркира като <strong>**текст**</strong> и се обявява „удебелено“ / „край на удебеленото“ (можете и ръчно да оградите текст с **).</span>
         </div>
     </div>
 
@@ -699,6 +712,7 @@
         const progressFill = document.getElementById('progressFill');
         const statusDot = document.getElementById('statusDot');
         const statusLabel = document.getElementById('statusLabel');
+        const boldBadge = document.getElementById('boldBadge');
         const charCount = document.getElementById('charCount');
         const metaSep = document.getElementById('metaSep');
         const timeEstimate = document.getElementById('timeEstimate');
@@ -844,11 +858,11 @@
             let total = 0;
 
             for (const item of items) {
-                if (item.type === 'newline') {
-                    total += estimateTTSDuration(getPunctuationMessage('\n'));
-                    total += newlinePause;
-                } else {
+                if (item.type === 'chunk') {
                     total += estimateChunkDuration(item.text);
+                } else {
+                    total += estimateTTSDuration(getMarkerMessage(item));
+                    total += getMarkerPauseMs(item);
                 }
             }
 
@@ -956,22 +970,162 @@
             return chunkArray;
         }
 
+        const bulletPattern = /^[•●▪◦·]\s*/;
+
+        // Every line break is announced (one = "нов ред", empty line = "нов абзац").
+        // **text** marks bold; bold changes are announced so you know to toggle it.
         function tokenizeText(text) {
-            const normalized = text.replace(/\r\n/g, '\n').trim();
-            if (!normalized) return [];
-
-            const paragraphs = normalized.split(/\n\s*\n+/).filter(p => p.trim());
+            const lines = text.replace(/\r\n?/g, '\n').split('\n');
             const items = [];
+            let blankBefore = false;
+            let boldOpen = false;
 
-            paragraphs.forEach((paragraph, index) => {
-                if (index > 0) items.push({ type: 'newline' });
-                splitParagraphIntoChunks(paragraph).forEach(chunk => {
-                    items.push({ type: 'chunk', text: chunk });
-                });
-            });
+            for (const rawLine of lines) {
+                let line = rawLine.trim();
+                if (!line) { blankBefore = true; continue; }
+
+                if (items.length) items.push({ type: 'newline', blank: blankBefore });
+                blankBefore = false;
+
+                if (bulletPattern.test(line)) {
+                    items.push({ type: 'bullet' });
+                    line = line.replace(bulletPattern, '');
+                }
+
+                const segments = line.split('**')
+                    .map((part, i) => ({ text: part.trim(), bold: i % 2 === 1 }))
+                    .filter(seg => seg.text);
+
+                for (const seg of segments) {
+                    if (seg.bold && !boldOpen) items.push({ type: 'bold-start' });
+                    if (!seg.bold && boldOpen) items.push({ type: 'bold-end' });
+                    boldOpen = seg.bold;
+                    splitParagraphIntoChunks(seg.text).forEach(chunk => {
+                        items.push({ type: 'chunk', text: chunk });
+                    });
+                }
+            }
 
             return items;
         }
+
+        function getMarkerMessage(item) {
+            const bg = language === 'bg';
+            switch (item.type) {
+                case 'newline': return item.blank ? (bg ? 'нов абзац' : 'новый абзац') : getPunctuationMessage('\n');
+                case 'bold-start': return bg ? 'удебелено' : 'жирный шрифт';
+                case 'bold-end': return bg ? 'край на удебеленото' : 'конец жирного';
+                case 'bullet': return bg ? 'нова точка' : 'новый пункт';
+                default: return '';
+            }
+        }
+
+        function getMarkerLabel(item) {
+            switch (item.type) {
+                case 'newline': return item.blank ? 'Нов абзац (празен ред)' : 'Нов ред';
+                case 'bold-start': return 'Започва удебелен текст';
+                case 'bold-end': return 'Край на удебеления текст';
+                case 'bullet': return 'Нова точка от списък';
+                default: return '';
+            }
+        }
+
+        function getMarkerPauseMs(item) {
+            return item.type === 'newline' ? newlinePause : periodPause;
+        }
+
+        // Pasted HTML (Google Docs, Word, web) -> plain text with line breaks and **bold**
+        const BLOCK_TAGS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'UL', 'OL', 'TR', 'TABLE', 'BLOCKQUOTE', 'PRE', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER']);
+        const SKIP_TAGS = new Set(['STYLE', 'SCRIPT', 'HEAD', 'TITLE', 'META', 'LINK', 'TEMPLATE']);
+        const BOLD_TAGS = new Set(['B', 'STRONG', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TH']);
+
+        function parseFontWeight(weight) {
+            if (!weight) return null;
+            if (weight === 'bold' || weight === 'bolder') return true;
+            if (weight === 'normal' || weight === 'lighter') return false;
+            const n = parseInt(weight, 10);
+            return isNaN(n) ? null : n >= 600;
+        }
+
+        function htmlToDictationText(html) {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const segs = [];
+
+            const lineHasContent = () => {
+                for (let i = segs.length - 1; i >= 0 && !segs[i].nl; i--) {
+                    if (!segs[i].prefix && segs[i].text.trim()) return true;
+                }
+                return false;
+            };
+            const breakLine = () => { if (lineHasContent()) segs.push({ nl: true }); };
+
+            function walk(node, bold, list) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const text = node.nodeValue.replace(/[\s ]+/g, ' ');
+                    if (text) segs.push({ text, bold });
+                    return;
+                }
+                if (node.nodeType !== Node.ELEMENT_NODE || SKIP_TAGS.has(node.tagName)) return;
+
+                const tag = node.tagName;
+                if (tag === 'BR') { segs.push({ nl: true }); return; }
+
+                // Google Docs wraps everything in <b style="font-weight:normal">, so style wins over tag
+                const weight = parseFontWeight(node.style && node.style.fontWeight);
+                const isBold = weight !== null ? weight : (BOLD_TAGS.has(tag) || bold);
+
+                let childList = list;
+                if (tag === 'UL' || tag === 'OL') {
+                    childList = { ordered: tag === 'OL', n: (parseInt(node.getAttribute('start'), 10) || 1) - 1 };
+                }
+
+                const block = BLOCK_TAGS.has(tag);
+                if (block) breakLine();
+                if (tag === 'LI' && list) {
+                    list.n++;
+                    segs.push({ text: list.ordered ? `${list.n}. ` : '• ', bold: false, prefix: true });
+                }
+                for (const child of node.childNodes) walk(child, isBold, childList);
+                if (block) breakLine();
+            }
+
+            walk(doc.body, false, null);
+
+            const lines = [[]];
+            for (const seg of segs) {
+                if (seg.nl) lines.push([]);
+                else lines[lines.length - 1].push(seg);
+            }
+
+            const out = lines.map(line => {
+                const runs = [];
+                for (const seg of line) {
+                    const last = runs[runs.length - 1];
+                    if (last && (last.bold === seg.bold || !seg.text.trim())) last.text += seg.text;
+                    else runs.push({ text: seg.text, bold: seg.bold });
+                }
+                return runs.map(run => {
+                    if (!run.bold || !run.text.trim()) return run.text;
+                    const m = run.text.match(/^(\s*)([\s\S]*?)(\s*)$/);
+                    return `${m[1]}**${m[2]}**${m[3]}`;
+                }).join('').replace(/ {2,}/g, ' ').trim();
+            });
+
+            return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+        }
+
+        textInput.addEventListener('paste', (e) => {
+            const html = e.clipboardData && e.clipboardData.getData('text/html');
+            if (!html) return;
+            const text = htmlToDictationText(html);
+            if (!text) return;
+
+            e.preventDefault();
+            if (!document.execCommand('insertText', false, text)) {
+                textInput.setRangeText(text, textInput.selectionStart, textInput.selectionEnd, 'end');
+                updateCharCount();
+            }
+        });
 
         function calculateTypingTime(text) {
             const charCount = text.replace(/\s/g, '').length;
@@ -1128,10 +1282,14 @@
                 const item = items[i];
                 setProgress(i, items.length);
 
-                if (item.type === 'newline') {
-                    progressDisplay.textContent = 'Празен ред между абзаци';
-                    await speakPunctuation('\n');
-                    await pauseFor(newlinePause);
+                if (item.type !== 'chunk') {
+                    if (item.type === 'bold-start') boldBadge.style.display = 'inline-flex';
+                    if (item.type === 'bold-end') boldBadge.style.display = 'none';
+                    const message = getMarkerMessage(item);
+                    progressDisplay.textContent = getMarkerLabel(item);
+                    punctuationDisplay.textContent = message;
+                    await speakWithGoogleTTS(message);
+                    await pauseFor(getMarkerPauseMs(item));
                     continue;
                 }
 
@@ -1167,6 +1325,7 @@
             punctuationDisplay.textContent = '';
             progressDisplay.textContent = '';
             progressFill.style.width = '0%';
+            boldBadge.style.display = 'none';
             pauseBtn.innerHTML = `${pauseIcon} Пауза`;
             document.body.classList.remove('is-playing', 'is-paused');
         }
