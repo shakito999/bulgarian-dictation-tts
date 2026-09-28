@@ -1048,7 +1048,119 @@
             return isNaN(n) ? null : n >= 600;
         }
 
-        function htmlToDictationText(html) {
+        // Word equations (OMML) live inside <!--[if gte msEquation 12]>…<![endif]--> with only an image fallback
+        function ommlToText(node) {
+            if (node.nodeType === Node.TEXT_NODE) return node.nodeValue.trim() ? node.nodeValue.replace(/\s+/g, ' ') : '';
+            if (node.nodeType !== Node.ELEMENT_NODE) return '';
+            const tag = node.tagName.toLowerCase();
+            if (tag.startsWith('m:') && tag.endsWith('pr')) return '';
+            const kids = () => Array.from(node.childNodes).map(ommlToText).join('').trim();
+            const part = name => {
+                const el = Array.from(node.children).find(c => c.tagName.toLowerCase() === name);
+                return el ? ommlToText(el).trim() : '';
+            };
+            const prop = (name, fallback) => {
+                const el = node.querySelector(name.replace(':', '\\:'));
+                return el && el.getAttribute('m:val') !== null ? el.getAttribute('m:val') : fallback;
+            };
+            switch (tag) {
+                case 'm:sub': return `_{${kids()}}`;
+                case 'm:sup': return `^{${kids()}}`;
+                case 'm:f': return `${mathGroup(part('m:num'))}/${mathGroup(part('m:den'))}`;
+                case 'm:rad': return rootText(part('m:deg'), part('m:e'));
+                case 'm:d': {
+                    const items = Array.from(node.children).filter(c => c.tagName.toLowerCase() === 'm:e').map(ommlToText);
+                    return `${prop('m:begchr', '(')}${items.join(prop('m:sepchr', ','))}${prop('m:endchr', ')')}`;
+                }
+                case 'm:nary': return prop('m:chr', '∫') + kids();
+                case 'm:func': return `${part('m:fname')} ${part('m:e')}`;
+                default: return kids();
+            }
+        }
+
+        // Web formulas (MathML, e.g. KaTeX/MathJax) -> i_0, x^2, a/b
+        function mathmlToText(node) {
+            if (node.nodeType === Node.TEXT_NODE) return node.nodeValue.trim();
+            if (node.nodeType !== Node.ELEMENT_NODE) return '';
+            const tag = node.tagName.toLowerCase();
+            if (tag === 'annotation' || tag === 'annotation-xml') return '';
+            const k = Array.from(node.children).map(mathmlToText);
+            switch (tag) {
+                case 'msub': case 'munder': return `${k[0]}_{${k[1]}}`;
+                case 'msup': case 'mover': return `${k[0]}^{${k[1]}}`;
+                case 'msubsup': case 'munderover': return `${k[0]}_{${k[1]}}^{${k[2]}}`;
+                case 'mfrac': return `${mathGroup(k[0])}/${mathGroup(k[1])}`;
+                case 'msqrt': return rootText('', k.join(''));
+                case 'mroot': return rootText(k[1], k[0]);
+                default: return node.children.length ? k.join('') : node.textContent.trim();
+            }
+        }
+
+        function rootText(deg, radicand) {
+            const sign = { '': '√', '2': '√', '3': '∛', '4': '∜' }[deg.trim()];
+            return sign ? `${sign}${mathGroup(radicand)}` : `${deg}√${mathGroup(radicand)}`;
+        }
+
+        function mathGroup(s) {
+            s = s.trim();
+            if (/^[(\[{]/.test(s)) {
+                // already wrapped when its first bracket closes at the very end
+                let depth = 0, end = -1;
+                for (let i = 0; i < s.length && end < 0; i++) {
+                    if ('([{'.includes(s[i])) depth++;
+                    else if (')]}'.includes(s[i]) && --depth === 0) end = i;
+                }
+                if (end === s.length - 1) return s;
+            }
+            return /^[\p{L}\p{N}.,]*(_\{?[\p{L}\p{N}]+\}?)?$/u.test(s) ? s : `(${s})`;
+        }
+
+        // Some editors (Google Docs, Word) leave equations out of the HTML but keep them in the plain text:
+        // put back every plain-text line whose letters/digits are missing from the converted HTML.
+        function restoreMissingLines(text, plain) {
+            if (!plain) return text;
+            const key = s => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+            const isSubsequence = (short, long) => {
+                let i = 0;
+                for (const ch of long) if (ch === short[i]) i++;
+                return i === short.length;
+            };
+            const lines = text.split('\n');
+            const keys = lines.map(key);
+            const all = keys.join('');
+            const inserts = new Map();
+            let at = -1;
+
+            for (const raw of plain.replace(/\r/g, '').split('\n')) {
+                const line = raw.replace(/\s+/g, ' ').trim();
+                const k = key(line);
+                if (!k) continue;
+                if (all.includes(k)) {
+                    const idx = keys.findIndex((h, i) => i > at && h && (h.includes(k) || (k.includes(h) && h.length * 2 >= k.length)));
+                    if (idx >= 0) at = idx;
+                    continue;
+                }
+                // Same formula written slightly differently (3√ vs ∛, extra brackets): already there
+                const similar = keys.findIndex((h, i) => i > at && h && isSubsequence(k, h) && k.length * 2 >= h.length);
+                if (similar >= 0) { at = similar; continue; }
+                const next = keys.findIndex((h, i) => i > at && h);
+                if (next >= 0 && isSubsequence(keys[next], k) && keys[next].length * 2 >= k.length) {
+                    lines[next] = line; // an inline formula was dropped from this line
+                    keys[next] = k;
+                    at = next;
+                    continue;
+                }
+                if (!inserts.has(at)) inserts.set(at, []);
+                inserts.get(at).push(line);
+            }
+            if (!inserts.size) return lines.join('\n');
+
+            const out = [...(inserts.get(-1) || [])];
+            lines.forEach((line, i) => out.push(line, ...(inserts.get(i) || [])));
+            return out.join('\n');
+        }
+
+        function htmlToDictationText(html, plain) {
             const doc = new DOMParser().parseFromString(html, 'text/html');
             const segs = [];
 
@@ -1066,10 +1178,18 @@
                     if (text) segs.push({ text, bold });
                     return;
                 }
+                if (node.nodeType === Node.COMMENT_NODE && /^\[if gte msEquation/.test(node.data)) {
+                    const inner = node.data.replace(/^\[if[^\]]*\]>/, '').replace(/<!\[endif\]$/, '');
+                    const eq = ommlToText(new DOMParser().parseFromString(`<body>${inner}</body>`, 'text/html').body);
+                    if (eq) segs.push({ text: eq, bold });
+                    return;
+                }
                 if (node.nodeType !== Node.ELEMENT_NODE || SKIP_TAGS.has(node.tagName)) return;
 
                 const tag = node.tagName;
                 if (tag === 'BR') { segs.push({ nl: true }); return; }
+                if (node.classList.contains('katex-html')) return; // KaTeX: visual duplicate of the MathML next to it
+                if (tag.toLowerCase() === 'math') { segs.push({ text: mathmlToText(node), bold }); return; }
 
                 // Google Docs wraps everything in <b style="font-weight:normal">, so style wins over tag
                 const weight = parseFontWeight(node.style && node.style.fontWeight);
@@ -1117,7 +1237,7 @@
                 }).join('').replace(/ {2,}/g, ' ').trim();
             });
 
-            return out.join('\n')
+            return restoreMissingLines(out.join('\n'), plain)
                 .replace(/([_^])\{\s*\}/g, '')
                 .replace(/([_^])\{\s*([^{}\s])\s*\}/g, '$1$2')
                 .replace(/\n{3,}/g, '\n\n')
@@ -1127,7 +1247,7 @@
         textInput.addEventListener('paste', (e) => {
             const html = e.clipboardData && e.clipboardData.getData('text/html');
             if (!html) return;
-            const text = htmlToDictationText(html);
+            const text = htmlToDictationText(html, e.clipboardData.getData('text/plain'));
             if (!text) return;
 
             e.preventDefault();
@@ -1194,10 +1314,12 @@
                 sub: 'долен индекс', sup: 'горен индекс', capLatin: 'главно', capGreek: 'главна',
                 ops: {
                     '=': 'равно', '+': 'плюс', '-': 'минус', '−': 'минус', '–': 'минус',
-                    '·': 'по', '⋅': 'по', '∙': 'по', '×': 'по', '/': 'делено на', '÷': 'делено на',
+                    '·': 'по', '⋅': 'по', '∙': 'по', '×': 'по', '/': 'делено на', '÷': 'до',
                     '<': 'по-малко от', '>': 'по-голямо от', '≤': 'по-малко или равно на', '≥': 'по-голямо или равно на',
                     '≈': 'приблизително равно на', '≠': 'различно от', '±': 'плюс минус',
-                    '√': 'корен от', '∞': 'безкрайност', '%': 'процента', '°': 'градуса'
+                    '√': 'корен от', '∛': 'кубичен корен от', '∜': 'корен четвърти от',
+                    '[': 'отворена квадратна скоба', ']': 'затворена квадратна скоба',
+                    '∞': 'безкрайност', '%': 'процента', '°': 'градуса'
                 },
                 latin: 'а бе це де е еф ге хаш и йот ка ел ем ен о пе ку ер ес те у ве дубъл-ве икс игрек зет'.split(' '),
                 greek: 'алфа бета гама делта епсилон дзета ета тета йота капа ламбда мю ню кси омикрон пи ро сигма сигма тау ипсилон фи хи пси омега'.split(' ')
@@ -1206,10 +1328,12 @@
                 sub: 'нижний индекс', sup: 'верхний индекс', capLatin: 'заглавная', capGreek: 'заглавная',
                 ops: {
                     '=': 'равно', '+': 'плюс', '-': 'минус', '−': 'минус', '–': 'минус',
-                    '·': 'умножить на', '⋅': 'умножить на', '∙': 'умножить на', '×': 'умножить на', '/': 'делить на', '÷': 'делить на',
+                    '·': 'умножить на', '⋅': 'умножить на', '∙': 'умножить на', '×': 'умножить на', '/': 'делить на', '÷': 'до',
                     '<': 'меньше', '>': 'больше', '≤': 'меньше или равно', '≥': 'больше или равно',
                     '≈': 'приблизительно равно', '≠': 'не равно', '±': 'плюс-минус',
-                    '√': 'корень из', '∞': 'бесконечность', '%': 'процентов', '°': 'градусов'
+                    '√': 'корень из', '∛': 'кубический корень из', '∜': 'корень четвёртой степени из',
+                    '[': 'открытая квадратная скобка', ']': 'закрытая квадратная скобка',
+                    '∞': 'бесконечность', '%': 'процентов', '°': 'градусов'
                 },
                 latin: 'а бэ цэ дэ е эф гэ аш и йот ка эль эм эн о пэ ку эр эс тэ у вэ дубль-вэ икс игрек зэт'.split(' '),
                 greek: 'альфа бета гамма дельта эпсилон дзета эта тета йота каппа лямбда мю ню кси омикрон пи ро сигма сигма тау ипсилон фи хи пси омега'.split(' ')
@@ -1226,7 +1350,7 @@
             '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9',
             '⁺': '+', '⁻': '-', '⁼': '=', '⁽': '(', '⁾': ')', 'ⁿ': 'n', 'ⁱ': 'i'
         };
-        const MATH_TRIGGER = /[_^=\/·⋅∙×÷<>≤≥≈≠±√∞Α-Ωα-ωµϕϑ¹²³⁰-ₜ]/;
+        const MATH_TRIGGER = /[_^=\/·⋅∙×÷<>≤≥≈≠±√∛∜∞Α-Ωα-ωµϕϑ¹²³⁰-ₜ]/;
         const LONE_LATIN = /^[("']*[A-Za-z][.,;:!?)"']*$/;
 
         function mathNames() {
@@ -1244,9 +1368,12 @@
         const isLatin = ch => /[A-Za-z]/.test(ch);
         const isDigit = ch => /[0-9]/.test(ch);
 
-        // Cyrillic words (и/или, км/ч) stay normal text; everything formula-like is spelled out
+        // Cyrillic words (и/или, км/ч) stay normal text; everything formula-like is spelled out,
+        // including formulas with Cyrillic indices (M_изч)
         function isMathWord(word) {
-            if (/[Ѐ-ӿ]/.test(word)) return false;
+            if (/[Ѐ-ӿ]/.test(word)) {
+                return /[_^√∛∜]/.test(word) || (/[A-Za-zΑ-Ωα-ω]/.test(word) && MATH_TRIGGER.test(word));
+            }
             return MATH_TRIGGER.test(word) || LONE_LATIN.test(word);
         }
 
@@ -1288,7 +1415,7 @@
                         content = readRun(c => c !== '}');
                         i++;
                     } else {
-                        content = readRun(c => isLatin(c) || isDigit(c) || toGreek(c) !== null);
+                        content = readRun(c => isLatin(c) || isDigit(c) || toGreek(c) !== null || /[Ѐ-ӿ]/.test(c));
                     }
                     if (content) atoms.push(indexAtom(ch === '_' ? names.sub : names.sup, content));
                     continue;
