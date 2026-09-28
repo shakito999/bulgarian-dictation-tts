@@ -682,7 +682,7 @@
 
         <div class="hint">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-            <span>Натиснете <strong>Започни</strong> — приложението чете на части и обявява пунктуацията. Всеки нов ред се казва „нов ред“, а празен ред — „нов абзац“. При поставяне от Google Docs/Word удебеленият текст се маркира като <strong>**текст**</strong> и се обявява „удебелено“ / „край на удебеленото“ (можете и ръчно да оградите текст с **).</span>
+            <span>Натиснете <strong>Започни</strong> — приложението чете на части и обявява пунктуацията. Всеки нов ред се казва „нов ред“, а празен ред — „нов абзац“. При поставяне от Google Docs/Word удебеленият текст се маркира като <strong>**текст**</strong> и се обявява „удебелено“ / „край на удебеленото“ (можете и ръчно да оградите текст с **). Формулите се четат знак по знак: <strong>M_2=M_1·i_0</strong> → „главно ем, долен индекс 2, равно…“, гръцките букви с имената им.</span>
         </div>
     </div>
 
@@ -816,6 +816,7 @@
         }
 
         function estimateWordPartsDuration(word) {
+            if (isMathWord(word)) return estimateMathWordDuration(word);
             const parts = tokenizeWord(word);
             let total = 0;
 
@@ -844,7 +845,7 @@
 
         function estimateChunkDuration(chunk) {
             const words = chunk.split(' ').filter(w => w.length > 0);
-            const needsWordByWord = words.some(word => wordContainsPunctuation(word));
+            const needsWordByWord = words.some(wordNeedsParts);
 
             if (needsWordByWord) {
                 return words.reduce((sum, word) => sum + estimateWordPartsDuration(word), 0);
@@ -1085,7 +1086,12 @@
                     list.n++;
                     segs.push({ text: list.ordered ? `${list.n}. ` : '• ', bold: false, prefix: true });
                 }
+                // Subscript/superscript (Docs: vertical-align, Word: <sub>/<sup>) -> _{..} / ^{..}
+                const align = node.style && node.style.verticalAlign;
+                const script = (tag === 'SUB' || align === 'sub') ? '_' : (tag === 'SUP' || align === 'super') ? '^' : '';
+                if (script) segs.push({ text: `${script}{`, bold: isBold });
                 for (const child of node.childNodes) walk(child, isBold, childList);
+                if (script) segs.push({ text: '}', bold: isBold });
                 if (block) breakLine();
             }
 
@@ -1111,7 +1117,11 @@
                 }).join('').replace(/ {2,}/g, ' ').trim();
             });
 
-            return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+            return out.join('\n')
+                .replace(/([_^])\{\s*\}/g, '')
+                .replace(/([_^])\{\s*([^{}\s])\s*\}/g, '$1$2')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
         }
 
         textInput.addEventListener('paste', (e) => {
@@ -1178,6 +1188,186 @@
             return parts;
         }
 
+        // ---- Formulas: i_0=n_1/n_2, M_2=M_1·i_0·η_0, i₀ > 1 ----
+        const MATH_NAMES = {
+            bg: {
+                sub: 'долен индекс', sup: 'горен индекс', capLatin: 'главно', capGreek: 'главна',
+                ops: {
+                    '=': 'равно', '+': 'плюс', '-': 'минус', '−': 'минус', '–': 'минус',
+                    '·': 'по', '⋅': 'по', '∙': 'по', '×': 'по', '/': 'делено на', '÷': 'делено на',
+                    '<': 'по-малко от', '>': 'по-голямо от', '≤': 'по-малко или равно на', '≥': 'по-голямо или равно на',
+                    '≈': 'приблизително равно на', '≠': 'различно от', '±': 'плюс минус',
+                    '√': 'корен от', '∞': 'безкрайност', '%': 'процента', '°': 'градуса'
+                },
+                latin: 'а бе це де е еф ге хаш и йот ка ел ем ен о пе ку ер ес те у ве дубъл-ве икс игрек зет'.split(' '),
+                greek: 'алфа бета гама делта епсилон дзета ета тета йота капа ламбда мю ню кси омикрон пи ро сигма сигма тау ипсилон фи хи пси омега'.split(' ')
+            },
+            ru: {
+                sub: 'нижний индекс', sup: 'верхний индекс', capLatin: 'заглавная', capGreek: 'заглавная',
+                ops: {
+                    '=': 'равно', '+': 'плюс', '-': 'минус', '−': 'минус', '–': 'минус',
+                    '·': 'умножить на', '⋅': 'умножить на', '∙': 'умножить на', '×': 'умножить на', '/': 'делить на', '÷': 'делить на',
+                    '<': 'меньше', '>': 'больше', '≤': 'меньше или равно', '≥': 'больше или равно',
+                    '≈': 'приблизительно равно', '≠': 'не равно', '±': 'плюс-минус',
+                    '√': 'корень из', '∞': 'бесконечность', '%': 'процентов', '°': 'градусов'
+                },
+                latin: 'а бэ цэ дэ е эф гэ аш и йот ка эль эм эн о пэ ку эр эс тэ у вэ дубль-вэ икс игрек зэт'.split(' '),
+                greek: 'альфа бета гамма дельта эпсилон дзета эта тета йота каппа лямбда мю ню кси омикрон пи ро сигма сигма тау ипсилон фи хи пси омега'.split(' ')
+            }
+        };
+
+        const GREEK_ALIASES = { 'µ': 'μ', 'ϕ': 'φ', 'ϑ': 'θ', 'ϵ': 'ε', 'ϱ': 'ρ', 'ϖ': 'π' };
+        const SUB_CHARS = {
+            '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9',
+            '₊': '+', '₋': '-', '₌': '=', '₍': '(', '₎': ')',
+            'ₐ': 'a', 'ₑ': 'e', 'ₒ': 'o', 'ₓ': 'x', 'ₕ': 'h', 'ₖ': 'k', 'ₗ': 'l', 'ₘ': 'm', 'ₙ': 'n', 'ₚ': 'p', 'ₛ': 's', 'ₜ': 't'
+        };
+        const SUP_CHARS = {
+            '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9',
+            '⁺': '+', '⁻': '-', '⁼': '=', '⁽': '(', '⁾': ')', 'ⁿ': 'n', 'ⁱ': 'i'
+        };
+        const MATH_TRIGGER = /[_^=\/·⋅∙×÷<>≤≥≈≠±√∞Α-Ωα-ωµϕϑ¹²³⁰-ₜ]/;
+        const LONE_LATIN = /^[("']*[A-Za-z][.,;:!?)"']*$/;
+
+        function mathNames() {
+            return MATH_NAMES[language] || MATH_NAMES.bg;
+        }
+
+        function toGreek(ch) {
+            const c = GREEK_ALIASES[ch] || ch;
+            const code = c.codePointAt(0);
+            if (code >= 0x3B1 && code <= 0x3C9) return { index: code - 0x3B1, upper: false };
+            if (code >= 0x391 && code <= 0x3A9 && code !== 0x3A2) return { index: code - 0x391, upper: true };
+            return null;
+        }
+
+        const isLatin = ch => /[A-Za-z]/.test(ch);
+        const isDigit = ch => /[0-9]/.test(ch);
+
+        // Cyrillic words (и/или, км/ч) stay normal text; everything formula-like is spelled out
+        function isMathWord(word) {
+            if (/[Ѐ-ӿ]/.test(word)) return false;
+            return MATH_TRIGGER.test(word) || LONE_LATIN.test(word);
+        }
+
+        function wordNeedsParts(word) {
+            return wordContainsPunctuation(word) || isMathWord(word);
+        }
+
+        function isMathSpecial(ch) {
+            return ch === '_' || ch === '^' || SUB_CHARS[ch] !== undefined || SUP_CHARS[ch] !== undefined ||
+                isDigit(ch) || isLatin(ch) || toGreek(ch) !== null ||
+                mathNames().ops[ch] !== undefined || punctuationChars.includes(ch);
+        }
+
+        // Splits a formula word into spoken atoms: { say, chars, show?, punct? }
+        function mathAtoms(word) {
+            const names = mathNames();
+            const chars = Array.from(word);
+            const atoms = [];
+            let i = 0;
+
+            const readRun = test => {
+                let s = '';
+                while (i < chars.length && test(chars[i])) s += chars[i++];
+                return s;
+            };
+            const indexAtom = (prefix, content) => ({
+                say: `${prefix} ${mathAtoms(content).map(a => a.say).join(' ')}`,
+                chars: Array.from(content).length + 1
+            });
+
+            while (i < chars.length) {
+                const ch = chars[i];
+
+                if (ch === '_' || ch === '^') {
+                    i++;
+                    let content;
+                    if (chars[i] === '{') {
+                        i++;
+                        content = readRun(c => c !== '}');
+                        i++;
+                    } else {
+                        content = readRun(c => isLatin(c) || isDigit(c) || toGreek(c) !== null);
+                    }
+                    if (content) atoms.push(indexAtom(ch === '_' ? names.sub : names.sup, content));
+                    continue;
+                }
+
+                if (SUB_CHARS[ch] !== undefined || SUP_CHARS[ch] !== undefined) {
+                    const map = SUB_CHARS[ch] !== undefined ? SUB_CHARS : SUP_CHARS;
+                    const content = Array.from(readRun(c => map[c] !== undefined)).map(c => map[c]).join('');
+                    atoms.push(indexAtom(map === SUB_CHARS ? names.sub : names.sup, content));
+                    continue;
+                }
+
+                if (isDigit(ch)) {
+                    let num = readRun(isDigit);
+                    while ((chars[i] === '.' || chars[i] === ',') && isDigit(chars[i + 1] || '')) {
+                        num += chars[i++] + readRun(isDigit);
+                    }
+                    atoms.push({ say: num, chars: num.length });
+                    continue;
+                }
+
+                if (isLatin(ch)) {
+                    const run = readRun(isLatin);
+                    if (run.length === 1) {
+                        const name = names.latin[run.toLowerCase().charCodeAt(0) - 97];
+                        const upper = run !== run.toLowerCase();
+                        atoms.push({ say: upper ? `${names.capLatin} ${name}` : name, chars: 1, show: run });
+                    } else {
+                        atoms.push({ say: run, chars: run.length, show: run });
+                    }
+                    continue;
+                }
+
+                const greek = toGreek(ch);
+                if (greek) {
+                    i++;
+                    const name = names.greek[greek.index];
+                    atoms.push({ say: greek.upper ? `${names.capGreek} ${name}` : name, chars: 1, show: ch });
+                    continue;
+                }
+
+                if (names.ops[ch] !== undefined) {
+                    i++;
+                    atoms.push({ say: names.ops[ch], chars: 1, show: ch });
+                    continue;
+                }
+
+                if (punctuationChars.includes(ch)) {
+                    i++;
+                    atoms.push({ say: getPunctuationMessage(ch), chars: 1, show: ch, punct: ch });
+                    continue;
+                }
+
+                const run = readRun(c => !isMathSpecial(c));
+                if (run) atoms.push({ say: run, chars: run.length });
+                else i++;
+            }
+
+            return atoms;
+        }
+
+        function mathAtomPauseMs(atom) {
+            if (atom.punct) return getPunctuationPauseMs(atom.punct);
+            return calculateTypingTime('x'.repeat(atom.chars));
+        }
+
+        async function speakMathWord(word) {
+            for (const atom of mathAtoms(word)) {
+                if (!isPlaying) return;
+                punctuationDisplay.textContent = atom.show ? `${atom.show}  ·  ${atom.say}` : atom.say;
+                await speakWithGoogleTTS(atom.say);
+                await pauseFor(mathAtomPauseMs(atom));
+            }
+        }
+
+        function estimateMathWordDuration(word) {
+            return mathAtoms(word).reduce((sum, atom) => sum + estimateTTSDuration(atom.say) + mathAtomPauseMs(atom), 0);
+        }
+
         async function pauseForPunctuation(punctuation) {
             await pauseFor(getPunctuationPauseMs(punctuation));
         }
@@ -1193,6 +1383,7 @@
         }
 
         async function speakWordParts(word) {
+            if (isMathWord(word)) return speakMathWord(word);
             const parts = tokenizeWord(word);
 
             for (let i = 0; i < parts.length; i++) {
@@ -1222,7 +1413,7 @@
         function speakChunk(chunk) {
             return new Promise(resolve => {
                 const words = chunk.split(' ').filter(w => w.length > 0);
-                const needsWordByWord = words.some(word => wordContainsPunctuation(word));
+                const needsWordByWord = words.some(wordNeedsParts);
 
                 if (needsWordByWord) {
                     let wordIndex = 0;
